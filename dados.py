@@ -1,0 +1,3 @@
+usuarios = []
+transacoes = []
+lixeira = []
