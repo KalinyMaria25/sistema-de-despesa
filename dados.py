@@ -1,4 +1,5 @@
 usuarios = []
 transacoes = []
 lixeira = []
- 
+
+
