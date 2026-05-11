@@ -1,74 +1,111 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 from dados import usuarios, transacoes, lixeira
 
-def cadastrar(nome, email, senha):
-    if not nome or not email or not senha:
-        return False
-    usuarios.append({"nome": nome, "email": email, "senha": senha})
-    return True
+# ================= LOGIN =================
 
-def login(email, senha):
-    for user in usuarios:
-        if user["email"] == email and user["senha"] == senha:
-            return user["nome"]
-    return None
+def cadastrar_usuario(nome, email, senha):
+
+    if not nome or not email or not senha:
+        return False, "Preencha todos os campos"
+
+    usuarios.append({
+        "nome": nome,
+        "email": email,
+        "senha": senha
+    })
+
+    return True, "Cadastro realizado com sucesso"
+
+
+def fazer_login(email, senha):
+
+    for usuario in usuarios:
+
+        if usuario["email"] == email and usuario["senha"] == senha:
+            return True, usuario["nome"]
+
+    return False, "Email ou senha incorretos"
+
 
 def redefinir_senha(email, nova_senha):
+
     if not email or not nova_senha:
-        return False
+        return False, "Preencha todos os campos"
 
-    for user in usuarios:
-        if user["email"] == email:
-            user["senha"] = nova_senha
-            return True
-    return False
+    for usuario in usuarios:
 
-def adicionar_transacao(tipo, valor, desc):
-    if not desc:
-        return False
+        if usuario["email"] == email:
+            usuario["senha"] = nova_senha
+            return True, "Senha atualizada"
 
-    transacoes.append({
-        "tipo": tipo,
-        "valor": valor,
-        "desc": desc,
-        "data": datetime.now()
-    })
-    return True
+    return False, "Email não encontrado"
+
+
+# ================= TRANSAÇÕES =================
+
+def adicionar_transacao(tipo, valor, descricao):
+
+    try:
+        valor = float(valor)
+
+        if descricao == "":
+            return False, "Descrição inválida"
+
+        transacoes.append({
+            "tipo": tipo,
+            "valor": valor,
+            "desc": descricao,
+            "data": datetime.now()
+        })
+
+        return True, "Transação adicionada"
+
+    except:
+        return False, "Valor inválido"
+
 
 def excluir_transacao(indice):
+
     try:
         item = transacoes.pop(indice)
+
         lixeira.append(item)
+
         return True
+
     except:
         return False
 
-def recuperar_dados():
+
+def recuperar_transacao():
+
     if lixeira:
-        transacoes.append(lixeira.pop())
+
+        item = lixeira.pop()
+
+        transacoes.append(item)
+
         return True
+
     return False
 
-def calcular_estatisticas():
-    receitas = [t['valor'] for t in transacoes if t['tipo'] == 'Receita']
-    despesas = [t['valor'] for t in transacoes if t['tipo'] == 'Despesa']
 
-    return {
-        "total_rec": sum(receitas),
-        "total_des": sum(despesas),
-        "max_rec": max(receitas) if receitas else 0,
-        "min_rec": min(receitas) if receitas else 0,
-        "max_des": max(despesas) if despesas else 0,
-        "min_des": min(despesas) if despesas else 0
-    }
+# ================= ESTATÍSTICAS =================
 
-def relatorio_periodo(dias):
-    hoje = datetime.now()
-    limite = hoje - timedelta(days=dias)
+def calcular_saldo():
 
-    lista = [t for t in transacoes if t['data'] >= limite]
+    receitas = sum(
+        t["valor"]
+        for t in transacoes
+        if t["tipo"] == "Receita"
+    )
 
-    rec = sum(t['valor'] for t in lista if t['tipo'] == 'Receita')
-    des = sum(t['valor'] for t in lista if t['tipo'] == 'Despesa')
+    despesas = sum(
+        t["valor"]
+        for t in transacoes
+        if t["tipo"] == "Despesa"
+    )
 
-    return rec, des
+    saldo = receitas - despesas
+
+    return receitas, despesas, saldo
