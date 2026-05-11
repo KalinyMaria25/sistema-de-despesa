@@ -4,10 +4,12 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from datetime import datetime, timedelta
 
+# "Banco" em memória
 usuarios = []
 transacoes = [] 
 lixeira = [] 
 
+# CORES
 amarelo = "#f1c40f"
 verde = "#2ecc71"
 vermelho = "#e74c3c"
@@ -17,6 +19,8 @@ cinza = "#2c3e50"
 azul = "#3498db"
 laranja = "#e67e22"
 cinza_recuperacao = "#95a5a6"
+
+# ================= FUNÇÕES DE NAVEGAÇÃO =================
 
 def mostrar_cadastro():
     frame_login.pack_forget()
@@ -43,6 +47,8 @@ def mostrar_dashboard(nome_usuario):
     lbl_boas_vindas.config(text=f"👤 Usuário: {nome_usuario}")
     atualizar_interface()
     frame_dashboard.pack(fill=BOTH, expand=True)
+
+# ================= FUNÇÕES DE LÓGICA =================
 
 def cadastrar():
     nome, email, senha = entry_nome.get(), entry_email_cad.get(), entry_senha_cad.get()
@@ -77,6 +83,8 @@ def redefinir_senha():
             return
             
     msg_esqueci.config(text="❌ E-mail não encontrado no sistema", fg=vermelho)
+
+# ================= OPERAÇÕES FINANCEIRAS =================
 
 def recuperar_dados():
     if lixeira:
@@ -139,39 +147,148 @@ def atualizar_interface():
     
     for t in transacoes:
         simbolo = "💰" if t['tipo'] == 'Receita' else "💸"
-        data_str = t['data'].strftime("%d/%m")
+        
+        # Alteração aqui: Adicionado %H:%M para mostrar hora e minuto
+        data_hora_str = t['data'].strftime("%d/%m %H:%M")
+        
         desc_limpa = t['desc'][:25]
-        item_formatado = f" {data_str} | {simbolo} {desc_limpa:<25} | R$ {t['valor']:>10.2f}"
+        
+        # Ajuste no f-string para acomodar o espaço extra da hora
+        item_formatado = f" {data_hora_str} | {simbolo} {desc_limpa:<25} | R$ {t['valor']:>10.2f}"
         lista_transacoes.insert(END, item_formatado)
 
     saldo = receitas_soma - despesas_soma
     lbl_saldo.config(text=f"Saldo: R$ {saldo:.2f}", fg=verde if saldo >= 0 else vermelho)
-    calcular_estatisticas()
-
+    if 'calcular_estatisticas' in globals(): # Verifica se a função existe
+        calcular_estatisticas()
+        
 def gerar_grafico():
     if not transacoes:
         messagebox.showwarning("Aviso", "Não há dados para gerar o gráfico!")
         return
+
     rec = sum(t['valor'] for t in transacoes if t['tipo'] == 'Receita')
     des = sum(t['valor'] for t in transacoes if t['tipo'] == 'Despesa')
-    fig, ax = plt.subplots(figsize=(5, 4))
-    ax.pie([rec, des], labels=['Receitas', 'Despesas'], colors=[verde, vermelho], autopct='%1.1f%%')
-    ax.set_title("Resumo Financeiro")
+
+    # --- Lógica de Análise ---
+    if rec > des:
+        status_msg = "Parabéns! Sua receita é maior que suas despesas."
+        cor_status = 'blue'
+    elif des > rec:
+        status_msg = "Atenção: Suas despesas estão altas!"
+        cor_status = 'red'
+    else:
+        status_msg = "Equilíbrio: Receitas e despesas estão iguais."
+        cor_status = 'gray'
+    # -------------------------
+
+    fig, ax = plt.subplots(figsize=(5, 5)) # Aumentei um pouco a altura para caber o texto
+    ax.pie([rec, des], labels=['Receitas', 'Despesas'], colors=[verde, vermelho], autopct='%1.1f%%', startangle=140)
+    
+    # Adiciona o título e a análise logo abaixo
+    ax.set_title(f"Resumo Financeiro\n", fontsize=14, fontweight='bold')
+    # O comando abaixo adiciona o texto de feedback dentro da área do gráfico
+    fig.text(0.5, 0.02, status_msg, ha='center', fontsize=10, color=cor_status, fontweight='bold')
+
     top = Toplevel()
     top.title("Gráfico de Gastos")
+    
     canvas = FigureCanvasTkAgg(fig, master=top)
     canvas.draw()
-    canvas.get_tk_widget().pack()
-
+    canvas.get_tk_widget().pack(pady=10)
 def exibir_relatorios():
     hoje = datetime.now()
-    def filtrar(dias):
-        data_limite = hoje - timedelta(days=dias)
-        sub_lista = [t for t in transacoes if t['data'] >= data_limite]
-        rec = sum(t['valor'] for t in sub_lista if t['tipo'] == 'Receita')
-        des = sum(t['valor'] for t in sub_lista if t['tipo'] == 'Despesa')
-        return rec, des
+    
+    janela_rel = Toplevel()
+    janela_rel.title("📊 Relatório Financeiro Detalhado")
+    janela_rel.geometry("600x650")
+    
+    # Cores de alto contraste para melhor visibilidade
+    bg_fundo = "#121212"    # Preto profundo
+    bg_linha = "#1e1e1e"    # Cinza grafite para as linhas
+    texto_claro = "#ffffff" # Branco puro
+    neon_verde = "#00ff7f"  # Verde neon (Receitas)
+    neon_vermelho = "#ff4d4d" # Vermelho coral (Despesas)
+    azul_destaque = "#3498db" 
 
+    janela_rel.config(bg=bg_fundo)
+
+    # Configuração da Barra de Rolagem (Scrollbar)
+    canvas_rel = Canvas(janela_rel, bg=bg_fundo, highlightthickness=0)
+    scrollbar = Scrollbar(janela_rel, orient="vertical", command=canvas_rel.yview)
+    scrollable_frame = Frame(canvas_rel, bg=bg_fundo)
+
+    scrollable_frame.bind(
+        "<Configure>",
+        lambda e: canvas_rel.configure(scrollregion=canvas_rel.bbox("all"))
+    )
+
+    canvas_rel.create_window((0, 0), window=scrollable_frame, anchor="nw")
+    canvas_rel.configure(yscrollcommand=scrollbar.set)
+
+    def criar_secao(titulo, dias):
+        # Cabeçalho da Seção
+        Label(scrollable_frame, text=f" {titulo} ", bg=azul_destaque, fg=texto_claro, 
+              font=("Arial", 11, "bold"), pady=8).pack(fill=X, pady=(20, 5))
+        
+        data_limite = hoje - timedelta(days=dias)
+        # Filtra as transações baseada na data atual
+        sub_lista = [t for t in transacoes if t['data'] >= data_limite]
+        
+        if not sub_lista:
+            Label(scrollable_frame, text="Nenhum registro neste período.", bg=bg_fundo, 
+                  fg="#7f8c8d", font=("Arial", 10, "italic")).pack(pady=10)
+        else:
+            for t in sub_lista:
+                cor_valor = neon_verde if t['tipo'] == 'Receita' else neon_vermelho
+                simbolo = "●" 
+                
+                # Container da linha individual
+                f_linha = Frame(scrollable_frame, bg=bg_linha, pady=5)
+                f_linha.pack(fill=X, padx=10, pady=2)
+                
+                # DATA, HORA E ANO FORMATADOS AQUI:
+                dt_formatada = t['data'].strftime("%d/%m/%Y %H:%M")
+                
+                # Organização visual da linha
+                Label(f_linha, text=f" {simbolo} ", bg=bg_linha, fg=cor_valor).pack(side=LEFT)
+                Label(f_linha, text=f"{dt_formatada} | {t['desc'][:15]:<15}", bg=bg_linha, 
+                      fg=texto_claro, font=("Courier", 10, "bold")).pack(side=LEFT)
+                Label(f_linha, text=f"R$ {t['valor']:>9.2f}", bg=bg_linha, 
+                      fg=cor_valor, font=("Courier", 10, "bold")).pack(side=RIGHT, padx=10)
+        
+        # Cálculos de Totais
+        r = sum(t['valor'] for t in sub_lista if t['tipo'] == 'Receita')
+        d = sum(t['valor'] for t in sub_lista if t['tipo'] == 'Despesa')
+        saldo = r - d
+        cor_saldo = neon_verde if saldo >= 0 else neon_vermelho
+
+        resumo_frame = Frame(scrollable_frame, bg=bg_fundo, pady=10)
+        resumo_frame.pack(fill=X)
+        
+        txt_resumo = f"RECEITAS: R${r:.2f}  |  DESPESAS: R${d:.2f}"
+        Label(resumo_frame, text=txt_resumo, bg=bg_fundo, fg="#bdc3c7", font=("Arial", 9)).pack()
+        Label(resumo_frame, text=f"SALDO DO PERÍODO: R${saldo:.2f}", bg=bg_fundo, 
+              fg=cor_saldo, font=("Arial", 12, "bold")).pack()
+
+    # Título Principal do Relatório
+    Label(scrollable_frame, text="HISTÓRICO DETALHADO DE MOVIMENTAÇÕES", bg=bg_fundo, 
+          fg=amarelo, font=("Arial", 14, "bold"), pady=20).pack()
+
+    # Chamada das seções automáticas
+    criar_secao("ÚLTIMAS 24 HORAS", 1)
+    criar_secao("ÚLTIMOS 7 DIAS", 7)
+    criar_secao("ÚLTIMOS 30 DIAS", 30)
+    criar_secao("HISTÓRICO COMPLETO", 3650)
+
+    # Exibição do Scroll
+    canvas_rel.pack(side="left", fill="both", expand=True)
+    scrollbar.pack(side="right", fill="y")
+    # Empacotamento do Scroll
+    canvas_rel.pack(side="left", fill="both", expand=True)
+    scrollbar.pack(side="right", fill="y")
+    canvas_rel.pack(side="left", fill="both", expand=True)
+    scrollbar.pack(side="right", fill="y")
     r_dia, d_dia = filtrar(1); r_sem, d_sem = filtrar(7)
     r_mes, d_mes = filtrar(30); r_ano, d_ano = filtrar(365)
 
@@ -194,12 +311,15 @@ def exibir_relatorios():
     criar_bloco("Últimos 30 Dias", r_mes, d_mes)
     criar_bloco("Últimos 365 Dias", r_ano, d_ano)
 
+# ================= INTERFACE TKINTER =================
+
 janela = Tk()
 janela.title("Sistema de Controle Financeiro")
 janela.config(bg=preto)
 try: janela.attributes('-zoomed', True)
 except: janela.state('zoomed')
 
+# --- FRAME LOGIN ---
 frame_login = Frame(janela, bg=preto)
 frame_login.pack(expand=True)
 Label(frame_login, text="💰 Controle Inteligente", bg=preto, fg=verde, font=("Arial", 25, "bold")).pack(pady=20)
@@ -212,6 +332,7 @@ Button(frame_login, text="Criar Conta", width=25, bg=amarelo, fg=preto, command=
 Button(frame_login, text="Esqueci minha senha", bg=preto, fg=azul, bd=0, command=mostrar_esqueci_senha, font=("Arial", 9, "underline"), cursor="hand2").pack(pady=5)
 msg_login = Label(frame_login, text="", bg=preto); msg_login.pack(pady=10)
 
+# --- FRAME CADASTRO ---
 frame_cadastro = Frame(janela, bg=preto)
 Label(frame_cadastro, text="👤+\nCriar Conta", bg=preto, fg=amarelo, font=("Arial", 22, "bold"), justify=CENTER).pack(pady=20)
 Label(frame_cadastro, text="👤 Nome Completo", bg=preto, fg=branco).pack()
@@ -224,6 +345,7 @@ Button(frame_cadastro, text="Salvar Cadastro", width=25, bg=amarelo, fg=preto, c
 Button(frame_cadastro, text="Voltar para Login", width=25, bg=branco, fg=preto, command=mostrar_login).pack()
 msg_cadastro = Label(frame_cadastro, text="", bg=preto); msg_cadastro.pack(pady=10)
 
+# --- FRAME ESQUECI A SENHA ---
 frame_esqueci_senha = Frame(janela, bg=preto)
 Label(frame_esqueci_senha, text="🔑 Recuperar Acesso", bg=preto, fg=azul, font=("Arial", 22, "bold")).pack(pady=20)
 Label(frame_esqueci_senha, text="Confirme seu E-mail cadastrado:", bg=preto, fg=branco).pack()
@@ -234,6 +356,7 @@ Button(frame_esqueci_senha, text="Atualizar Senha", width=25, bg=azul, fg=branco
 Button(frame_esqueci_senha, text="Voltar ao Login", width=25, bg=branco, fg=preto, command=mostrar_login).pack()
 msg_esqueci = Label(frame_esqueci_senha, text="", bg=preto); msg_esqueci.pack(pady=10)
 
+# --- FRAME DASHBOARD ---
 frame_dashboard = Frame(janela, bg=preto)
 lbl_boas_vindas = Label(frame_dashboard, text="", bg=preto, fg=branco, font=("Arial", 14)); lbl_boas_vindas.pack(pady=10)
 lbl_saldo = Label(frame_dashboard, text="Saldo: R$ 0.00", bg=preto, fg=verde, font=("Arial", 24, "bold")); lbl_saldo.pack(pady=10)
@@ -247,6 +370,7 @@ entry_valor = Entry(f_inputs, width=15, font=("Arial", 11)); entry_valor.grid(ro
 
 Label(frame_dashboard, text="📜 Histórico de Movimentações", bg=preto, fg=amarelo, font=("Arial", 12, "italic")).pack(pady=5)
 
+# A Listbox usa font Courier (monoespaçada) para manter o alinhamento
 lista_transacoes = Listbox(frame_dashboard, width=85, height=12, bg=cinza, fg=branco, font=("Courier", 14, "bold"), borderwidth=0, highlightthickness=1)
 lista_transacoes.pack(pady=5, padx=20)
 
